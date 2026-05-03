@@ -9,7 +9,12 @@ async function runSimulation(state, steps = 5) {
 
 async function tick(state) {
   const event = state.queue.shift();
-  if (!event) return;
+  if (!event) {
+    console.log("[Tick] Queue empty, skipping");
+    return;
+  }
+
+  console.log(`[Tick] Processing event:`, event.type, event.content);
 
   state.timeline.push(event);
 
@@ -18,13 +23,21 @@ async function tick(state) {
   }
 
   for (const agent of state.agents) {
-    if (!canSee(agent, event)) continue;
-    if (!shouldReact(agent, state)) continue;
+    if (!canSee(agent, event)) {
+      console.log(`[Agent ${agent.id}] Cannot see event`);
+      continue;
+    }
+    if (!shouldReact(agent, state)) {
+      console.log(`[Agent ${agent.id}] Decided not to react`);
+      continue;
+    }
 
+    console.log(`[Agent ${agent.id}] Reacting as ${agent.role}`);
     const newEvent = await agentDecide(agent, event, state);
 
     if (newEvent) {
       state.queue.push(newEvent);
+      console.log(`[Agent ${agent.id}] Pushed new event:`, newEvent.content);
     }
   }
 
@@ -73,13 +86,8 @@ async function agentDecide(agent, event, state) {
   }
 
   try {
-    const content = await callLLM(userPrompt, systemPrompt);
-    return {
-      type: "COMMENT",
-      content: content,
-      source: agent.id,
-      target: "USER",
-    };
+    const result = await callLLM(agent, event, state);
+    return result;
   } catch (error) {
     console.error(`LLM error for agent ${agent.id}:`, error.message);
     return null;
